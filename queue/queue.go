@@ -82,11 +82,17 @@ func (q *Queue) AddURL(URL string) error {
 		URL:    u,
 		Method: "GET",
 	}
-	d, err := r.Marshal()
-	if err != nil {
-		return err
+	switch q.storage.(type) {
+	case *InMemoryQueueStorage:
+		return q.storage.(*InMemoryQueueStorage).AddRequestPointer(r)
+	default:
+		d, err := r.Marshal()
+		if err != nil {
+			return err
+		}
+		return q.storage.AddRequest(d)
 	}
-	return q.storage.AddRequest(d)
+
 }
 
 // AddRequest adds a new Request to the queue
@@ -106,11 +112,16 @@ func (q *Queue) AddRequest(r *colly.Request) error {
 }
 
 func (q *Queue) storeRequest(r *colly.Request) error {
-	d, err := r.Marshal()
-	if err != nil {
-		return err
+	switch q.storage.(type) {
+	case *InMemoryQueueStorage:
+		return q.storage.(*InMemoryQueueStorage).AddRequestPointer(r)
+	default:
+		d, err := r.Marshal()
+		if err != nil {
+			return err
+		}
+		return q.storage.AddRequest(d)
 	}
-	return q.storage.AddRequest(d)
 }
 
 // Size returns the size of the queue
@@ -195,13 +206,23 @@ func independentRunner(requestc <-chan *colly.Request, complete chan<- struct{})
 }
 
 func (q *Queue) loadRequest(c *colly.Collector) (*colly.Request, error) {
-	buf, err := q.storage.GetRequest()
-	if err != nil {
-		return nil, err
+	switch q.storage.(type) {
+	/*
+		case *InMemoryQueueStorage:
+			r, err := q.storage.(*InMemoryQueueStorage).GetRequestPointer()
+			//todo need to figure out why this is causing a panic of "nil pointer dereference"
+			return r, err
+	*/
+	default:
+		buf, err := q.storage.GetRequest()
+		if err != nil {
+			return nil, err
+		}
+		copied := make([]byte, len(buf))
+		copy(copied, buf)
+		return c.UnmarshalRequest(copied)
 	}
-	copied := make([]byte, len(buf))
-	copy(copied, buf)
-	return c.UnmarshalRequest(copied)
+
 }
 
 // Init implements Storage.Init() function
